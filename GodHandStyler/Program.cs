@@ -1,8 +1,10 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Windows.Automation;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 using GodHandStyler;
+using ControlType = FlaUI.Core.Definitions.ControlType;
 
 
 Status status = Status.Unconnected;
@@ -24,21 +26,30 @@ void reloadCheats()
     using (var automation = new UIA3Automation())
     {
         var window = automation.FromHandle(handle.MainWindowHandle).AsWindow();
-        var mainWindow = window.Parent.FindFirstDescendant(x => x.ByName("PCSX2 v2.6.3"))?.AsWindow();
-        var gameWindow = window.Parent.FindFirstDescendant(x => x.ByName("God Hand")).AsWindow();
-        mainWindow?.SetForeground();
-        mainWindow?.FocusNative();
+        var windows = window.Parent.FindAllDescendants(x=>x.ByControlType(ControlType.Window)).Select(x=>x.AsWindow()).ToList();
+        Window mainWindow = null;
+        Window gameWindow = null;
         
-        var toolsMenu = mainWindow.FindFirstDescendant(cf => cf.ByName("Инструменты")).AsMenuItem();
-        toolsMenu.Click(); 
-        System.Threading.Thread.Sleep(300);
-        var reloadItem = mainWindow.FindFirstDescendant(cf => cf.ByName("Перезагрузить читы и патчи"))?.AsMenuItem();
-        if (reloadItem == null)
+        if (windows.Count > 1)
         {
-            statusText += " second try ...";
-            reloadItem = automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Перезагрузить читы и патчи"))?.AsMenuItem();
+            mainWindow = windows.FirstOrDefault(x => x.AsWindow().Title.StartsWith("PCSX2"));
+            gameWindow = windows.FirstOrDefault(x => x.AsWindow().Title.StartsWith("God"));
+        }
+        else
+        {
+            mainWindow = window;
+            gameWindow = window;
         }
         
+        mainWindow?.SetForeground();
+        mainWindow?.FocusNative();
+
+        var toolsMenu = mainWindow.FindAllChildren()[2].AsMenuItem().Items[3].AsMenuItem();
+        
+        toolsMenu.Click(); 
+        Thread.Sleep(300);
+        
+        var reloadItem = toolsMenu.FindAllDescendants(x => x.ByControlType(ControlType.MenuItem))[5].AsMenuItem();
         reloadItem?.Click();
         gameWindow?.SetForeground();
         gameWindow?.Focus();
@@ -50,7 +61,6 @@ void reloadCheats()
 
 void updateStatus(IntPtr m_ipc)
 {
-    
     emuStatus = PineIPC.Status(m_ipc);
     switch (status)
     {
@@ -76,10 +86,11 @@ void updateStatus(IntPtr m_ipc)
                     var val = PineIPC.Read(m_ipc, 0x20568880, PineIPC.IPCCommand.MsgRead16);
                     var layout = ControlLayout.GetLayout(m_ipc);
 
-                    for (int i = 4; i < 9; ++i)
+                    for (int i = 2; i < 10; ++i)
                     {
                         Console.SetCursorPosition(0, i);
-                        Console.WriteLine(new string(new char[Console.WindowWidth-1]));
+                        //Console.Write(new string(new char[Console.WindowWidth-1]));
+                        Console.Write("                                                                                 ");
                     }
                     
                     int counter = 0;
@@ -199,6 +210,7 @@ while (true)
                 break;
         }
         
+        
         updateStatus(m_ipc);
         drawMenu();
         drawStatusbar();
@@ -219,7 +231,5 @@ public enum Status
 {
     Unconnected,
     Connected,
-    Ready,
-    Injecting,
 }
 
